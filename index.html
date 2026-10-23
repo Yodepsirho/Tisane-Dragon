@@ -18,7 +18,7 @@
   <main class="main">
     <header class="top">
       <h1 style="display:flex;align-items:center;gap:12px"><img class="logo" src="T%26D_LOGO.png" alt="" width="46" height="46">Tisane &amp; Dragon</h1>
-      <label class="who">Personnage <input id="player" placeholder="Nom du PJ" autocomplete="off"></label>
+      <label class="who">Personnage <select id="player" aria-label="Personnage"></select></label>
       <button type="button" id="fiche-btn" class="btn ghost small" title="Fiche de personnage">Fiche</button>
       <a class="swap" href="alchimie.html" title="Aller à l'alchimie" aria-label="Aller à Alchimie &amp; Dragon">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6l-5.2 9.1A2 2 0 0 0 6.5 21h11a2 2 0 0 0 1.7-2.9L14 9V3"/><path d="M7.5 15h9"/></svg></a>
@@ -27,14 +27,18 @@
     <div id="banner" class="banner hidden"></div>
 
     <nav class="tabs" role="tablist">
-      <button id="tab-recette" role="tab" class="active">Atelier</button>
+      <button id="tab-accueil" role="tab" class="active">Récolte</button>
+      <button id="tab-recette" role="tab">Atelier</button>
       <button id="tab-grimoire" role="tab">Le Grimoire</button>
       <button id="tab-recherche" role="tab">Recherche</button>
       <button id="tab-mj" role="tab" class="hidden">MJ</button>
     </nav>
 
+    <!-- ONGLET ACCUEIL : parcours express pour les débutants -->
+    <section id="view-accueil"><div class="panel"><div id="qk-root"></div></div></section>
+
     <!-- ONGLET RECETTE -->
-    <section id="view-recette">
+    <section id="view-recette" class="hidden">
       <div class="panel">
         <svg id="socio" viewBox="0 0 800 380" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Relations entre les ingrédients"></svg>
         <div class="legend">
