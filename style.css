@@ -1,4 +1,4 @@
-  :root{
+:root{
     color-scheme:dark;
     --night:#0f1a1b;      /* fond de page : vert-encre */
     --bench:#152325;      /* panneaux */
@@ -258,3 +258,51 @@
     --night:#13111d; --bench:#1a1727; --leaf:#262238; --line:#38324f; --ink:#e6e1f0; --muted:#9a93b8;
     --sage:#8fd0c4; --rose:#e08f9f; --lamp:#d9b25f; --lamp-bg:#1f1a14; --lamp-line:#4a3a22;
   }
+
+  /* ---------- Cueillette : parcours express ---------- */
+  #view-accueil h2{font-size:1.5rem;margin-bottom:10px}
+  #view-accueil h3{font-size:1.15rem;margin:0 0 6px}
+  .qk-step{display:flex;align-items:center;gap:10px;margin:16px 0 8px;font:400 1.2rem var(--serif);color:var(--ink)}
+  .qk-n{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1px solid var(--lamp);color:var(--lamp);font:700 .9rem var(--sans)}
+  .qk-note{background:var(--lamp-bg);border:1px solid var(--lamp-line);border-radius:8px;padding:10px 14px;margin:0 0 6px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .qk-pill{font-size:1.05rem;padding:5px 16px}
+  .qk-envs .dot,.qk-pill .dot{display:inline-block;border-radius:50%}
+  .qk-modes{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  @media (max-width:560px){.qk-modes{grid-template-columns:1fr}}
+  .qk-mode{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:12px;align-items:center;text-align:left;background:var(--leaf);border:1px solid var(--line);border-radius:10px;padding:12px 16px;color:var(--ink);cursor:pointer}
+  .qk-mode:hover{border-color:var(--muted)}
+  .qk-mode.on{border-color:var(--sage);background:rgba(163,196,160,.12)}
+  .qk-mode .qk-ico{grid-row:1 / span 2;font-size:2rem;line-height:1}
+  .qk-mode b{font:400 1.3rem var(--serif)}
+  .qk-mode small{color:var(--muted);font-size:.95rem}
+  .qk-go{font-size:1.15rem;padding:10px 22px}
+  .qk-hint{margin:8px 0}
+  .qk-finds{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+  .qk-card{position:relative;background:var(--leaf);border:1px solid var(--line);border-radius:10px;padding:12px 14px 12px}
+  .qk-card.none{opacity:.7;border-style:dashed}
+  .qk-card .qk-name{font:400 1.25rem var(--serif);margin:18px 0 2px}
+  .qk-x{color:var(--lamp);font:700 1rem var(--sans)}
+  .qk-q{display:inline-block;font-size:.85rem;border:1px solid var(--line);border-radius:999px;padding:0 10px;color:var(--sage);margin:2px 0 6px}
+  .qk-desc{font-size:.92rem;line-height:1.35}
+  .qk-die{position:absolute;top:8px;right:10px;font-size:.9rem;color:var(--muted)}
+  .qk-slot .qk-die{position:static;margin-left:auto;white-space:nowrap}
+  .qk-die small{font-size:.75rem}
+  .qk-rec{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+  .qk-new{color:var(--lamp);font-size:.95rem}
+  .qk-okline{color:var(--sage);font-weight:700}
+  .qk-slots{display:grid;gap:6px;margin:6px 0 12px}
+  .qk-slot{display:flex;align-items:center;gap:10px;background:var(--leaf);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+  .qk-slot.ok{border-color:var(--sage)}
+  .qk-slot.ko{border-color:var(--rose)}
+  .qk-st{font-size:1.2rem}
+  .qk-verdict{border-radius:8px;padding:10px 14px;margin:0 0 10px;font:400 1.2rem var(--serif)}
+  .qk-verdict.good{background:rgba(163,196,160,.14);border:1px solid var(--sage)}
+  .qk-verdict.bad{background:rgba(214,140,126,.1);border:1px solid var(--rose)}
+  .qk-foot{margin-top:22px;font-size:.9rem}
+  .qk-foot select{font-size:.9rem}
+  @keyframes qk-pop{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
+  .qk-card.pop{animation:qk-pop .45s ease-out both}
+  .qk-slots.fresh .qk-slot{animation:qk-pop .4s ease-out both}
+  @media (prefers-reduced-motion:reduce){.qk-card.pop,.qk-slots.fresh .qk-slot{animation:none}}
+  .qk-rank{margin-left:auto;font:400 .95rem var(--sans);color:var(--muted);display:flex;align-items:center;gap:8px}
+  .qk-info{background:var(--lamp-bg);border:1px solid var(--lamp-line);border-radius:8px;padding:8px 12px;margin:0 0 12px;font-size:.95rem}
