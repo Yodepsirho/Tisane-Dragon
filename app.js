@@ -2213,4 +2213,4 @@ store.subscribe("grimoire_ingredients", d => { libIng = d; onLib(); });
 store.subscribe("grimoire_potions", d => { libPot = d; onLib(); });
 store.subscribe("grimoire_anecdotes", d => { libAnec = d; onLib(); });
 renderQualTable(); renderInventory(); renderRecipes(); renderTisanes(); renderCategories();
-showTab("accueil");
+showTab("accueil"); 
