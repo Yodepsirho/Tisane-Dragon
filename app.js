@@ -1682,7 +1682,7 @@ $("view-mj").addEventListener("click", e => {
    La fiche est rangée dans la collection « alch_fiches » : les règles Firestore l'autorisent déjà pour les deux pages.
    ============================================================ */
 let FICHES = [];
-const SPECS = ["", "Abstracteur", "Alkahest", "Apothicaire"];
+const SPECS = ["Apothicaire", "Abstracteur", "Alkahest"];   // Apothicaire par défaut
 const ficheOf = () => FICHES.find(f => f.id === (player() || "").replace(/[\/\s]+/g, "_")) || null;
 const ficheId = () => (player() || "").replace(/[\/\s]+/g, "_");
 function ficheModal() {
@@ -1692,7 +1692,7 @@ function ficheModal() {
     <form id="fi-form" autocomplete="off"><label class="muted" for="fi-rank">Rang</label>
     <select id="fi-rank" class="full">${SR_RANKS.map(r => `<option value="${r[0]}"${r[0] === (f.rank || "Novice") ? " selected" : ""}>${r[0]} (modificateur ${sgn(r[1])})</option>`).join("")}</select>
     <label class="muted" for="fi-spec" style="display:block;margin-top:12px">Spécialisation</label>
-    <select id="fi-spec" class="full">${SPECS.map(x => `<option value="${x}"${x === (f.spec || "") ? " selected" : ""}>${x || "Aucune"}</option>`).join("")}</select>
+    <select id="fi-spec" class="full">${SPECS.map(x => `<option value="${x}"${x === (f.spec || "Apothicaire") ? " selected" : ""}>${x}</option>`).join("")}</select>
     <label class="muted" for="fi-notes" style="display:block;margin-top:12px">Notes</label><textarea id="fi-notes" rows="4" style="width:100%">${esc(f.notes || "")}</textarea>
     <div class="actions-row"><button type="button" class="btn ghost" id="fi-cancel">Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`);
   $("fi-cancel").onclick = closeModal;
@@ -1741,11 +1741,13 @@ if ($("inv-suggest")) $("inv-suggest").onclick = () => {
    ============================================================ */
 const SR_Q = ["Commun", "Peu commun", "Rare", "Épique", "Légendaire"];
 const SR_MIN = { "Commun": 5, "Peu commun": 11, "Rare": 16, "Épique": 20, "Légendaire": 23 };   // total (d20 + modificateur de rang) minimum pour chaque rareté ; en dessous de 5 : rien
-/* Modificateur du d20 de recherche selon le rang (l'ordre sert aussi à débloquer les recettes de l'apothicaire, par rang 0 à 4) */
+/* Modificateur du d20 de recherche selon le rang (l'ordre sert aussi à débloquer les recettes par rang, 0 à 4) */
 const SR_RANKS = [["Novice", -3], ["Apprenti", -1], ["Expert", 0], ["Compagnon", 1], ["Maître", 3]];
 const sgn = n => n > 0 ? "+" + n : n < 0 ? "−" + (-n) : "0";
 const SR = { mode: "gen", env: "", rank: localStorage.getItem("tisane_rank") || "Novice", d20: "", die: "", rec: "", ing: "" };
 const srRank = () => { const f = ficheOf(); return f && f.rank ? f.rank : SR.rank; };
+const srSpec = () => { const f = ficheOf(); return f && f.spec ? f.spec : (localStorage.getItem("tisane_spec") || "Apothicaire"); };
+const qkSpecOk = sp => { const l = String(sp || "").split(",").map(x => x.trim()).filter(Boolean); return !l.length || l.includes(srSpec()); };   // sans spécialisation : pour tous
 const srBonus = () => (SR_RANKS.find(r => r[0] === srRank()) || [0, 0])[1];
 const srRarity = t => t >= 23 ? "Légendaire" : t >= 20 ? "Épique" : t >= 16 ? "Rare" : t >= 11 ? "Peu commun" : t >= 5 ? "Commun" : null;   // 0-4 rien · 5-10 commun · 11-15 peu commun · 16-19 rare · 20-22 épique · 23+ légendaire
 const srEnvs = () => categories.filter(c => groupOf(c) === "environnement");
@@ -1947,6 +1949,16 @@ function qkMatch(slots, units) {   // chaque emplacement de la recette reçoit a
    Les ingrédients viennent de la bibliothèque du MJ ; le fichier recettes-apothicaire.js ne sert qu'à choisir les recettes et à donner outils, DD, durée et valeur. */
 const APO = window.APO || [];
 const qkApoOf = name => APO.find(a => norm(a.n) === norm(name)) || null;
+/* Rang, outils, test, durée et valeur d'une recette de la bibliothèque, lus dans sa fiche (« Rang : Apprenti · Spécialisation : … », « Test : test d'Intelligence DD 10 »…).
+   Une recette interdite ou sans rang lisible n'est pas proposée. */
+function qkFromText(rec) {
+  const t = rec.text || "", g = re => { const m = re.exec(t); return m ? m[1].trim() : ""; };
+  const r = SR_RANKS.findIndex(x => x[0] === g(/Rang\s*:\s*([^\s·\n]+)/));
+  if (r < 0 || /interdit/i.test(g(/Spécialisation\s*:\s*([^\n]+)/))) return null;
+  const test = g(/Test\s*:\s*([^\n]+)/), hm = /Temps de fabrication\s*:\s*(\d+)\s*(heure|jour)/i.exec(t), dm = /DD\s*(\d+)/.exec(test), sm = /test d(?:e|['’])\s*([^\s]+)/i.exec(test), o = g(/Outils\s*:\s*([^\n]+)/), v = g(/Valeur\s*:\s*([^\n·]+)/);
+  const sp = g(/Spécialisation\s*:\s*([^\n·]+)/);
+  return hm && dm && sm && o && v ? { r, sp, h: +hm[1] * (/jour/i.test(hm[2]) ? 24 : 1), dd: +dm[1], s: sm[1], o, v } : { r, sp };
+}
 function qkRecipes() {
   const me = player(); if (!me) return [];
   const seen = new Map(), favOf = name => trials.some(x => norm(x.result || "") === norm(name) && (x.favs || []).includes(me));
@@ -1961,11 +1973,18 @@ function qkRecipes() {
   });
   if (ALCH) {
     const idx = Math.max(0, SR_RANKS.findIndex(x => x[0] === srRank()));
-    APO.filter(a => !a.f && a.r <= idx).forEach(a => {
+    APO.filter(a => !a.f && a.r <= idx && qkSpecOk(a.sp)).forEach(a => {
       const key = norm(a.n); if (seen.has(key)) return;
       const rec = RECS.find(x => norm(x.name) === key);
       const ids = rec && (rec.ingredients || []).length ? rec.ingredients : a.i.map(([c, sp]) => sp ? c + " - " + sp : c);
       seen.set(key, { key, name: a.n, ids, slots: ids.map(resolveSlot), fav: favOf(a.n), apo: a });
+    });
+    /* Puis toutes les autres recettes de la bibliothèque, de la spécialisation du personnage (ou sans spécialisation), dont le rang (lu dans leur fiche) est inférieur ou égal à celui du personnage ; les recettes interdites restent cachées */
+    RECS.forEach(x => {
+      const key = norm(x.name); if (seen.has(key) || !(x.ingredients || []).length) return;
+      const ap = qkApoOf(x.name); if (ap && ap.f) return;
+      const a = ap || qkFromText(x); if (!a || a.r > idx || !qkSpecOk(a.sp)) return;
+      seen.set(key, { key, name: x.name, ids: x.ingredients, slots: x.ingredients.map(resolveSlot), fav: favOf(x.name), apo: a });
     });
   }
   return [...seen.values()].sort((a, b) => (b.fav - a.fav) || ((a.apo ? a.apo.r : 0) - (b.apo ? b.apo.r : 0)) || a.name.localeCompare(b.name, "fr"));
@@ -1979,7 +1998,7 @@ const QK_STAT = { Int: "Intelligence", Sag: "Sagesse", Dex: "Dextérité", For: 
 const qkHours = h => h >= 16 ? `${h} h (≈ ${Math.ceil(h / 8)} jours à 8 h)` : `${h} h`;
 function qkMod(it) { const m = /modificateur du DD de fabrication\s*([−+-]?\s*\d+)/.exec(it.desc || ""); return m ? parseInt(m[1].replace("−", "-").replace(/\s/g, ""), 10) : 0; }
 function qkInfo(rec, r, complete) {
-  const a = rec.apo; if (!a) return "";
+  const a = rec.apo; if (!a || a.dd === undefined) return "";
   const sum = complete ? r.su.map(j => r.units[j].it).filter(it => !it.prod && !it.lit).reduce((t, it) => t + qkMod(it), 0) : 0, dd = a.dd + sum;
   const note = !complete ? ` <span class="muted">(de base ; selon la qualité des ingrédients)</span>` : sum ? ` <span class="muted">(base ${a.dd}, ${sum > 0 ? "+" : "−"}${Math.abs(sum)} selon tes ingrédients)</span>` : "";
   return `<div class="qk-info">⚗️ ${esc(cap(a.o))} · test de ${esc(QK_STAT[a.s] || a.s)} <b>DD ${dd}</b>${note} · ${qkHours(a.h)} · valeur ${esc(a.v)}</div>`;
@@ -2096,7 +2115,7 @@ function renderQuick() {
   SR.env = QK.env;
   let h = `<h2>Que veux-tu faire aujourd'hui ?</h2>`;
   if (!me) h += `<div class="qk-note">👤 Commence par choisir ton personnage. <button type="button" class="btn small" data-qk="name">Choisir mon personnage</button></div>`;
-  h += `<div class="qk-step"><span class="qk-n">1</span> Où es-tu ?<label class="qk-rank">Rang <select id="qk-rank">${SR_RANKS.map(r => `<option value="${esc(r[0])}"${r[0] === srRank() ? " selected" : ""}>${esc(r[0])} (${sgn(r[1])})</option>`).join("")}</select></label></div>`;
+  h += `<div class="qk-step"><span class="qk-n">1</span> Où es-tu ?<span style="margin-left:auto;display:flex;gap:14px;flex-wrap:wrap"><label class="qk-rank" style="margin-left:0">Rang <select id="qk-rank">${SR_RANKS.map(r => `<option value="${esc(r[0])}"${r[0] === srRank() ? " selected" : ""}>${esc(r[0])} (${sgn(r[1])})</option>`).join("")}</select></label>${ALCH ? `<label class="qk-rank" style="margin-left:0">Spécialisation <select id="qk-spec">${SPECS.map(x => `<option${x === srSpec() ? " selected" : ""}>${x}</option>`).join("")}</select></label>` : ""}</span></div>`;
   h += envs.length ? `<div class="fchips qk-envs">${envs.map(e => `<button type="button" class="fchip qk-pill${QK.env === e.id ? " on" : ""}" data-qk-env="${esc(e.id)}"><span class="dot" style="background:${esc(e.color)}"></span>${esc(e.name)}</button>`).join("")}</div>`
     : `<p class="muted">Le grimoire n'a pas encore d'environnements : le MJ doit en créer.</p>`;
   h += `<div class="qk-step"><span class="qk-n">2</span> Que fais-tu ?</div><div class="qk-modes">
@@ -2137,6 +2156,7 @@ if ($("qk-root")) {
     const t = e.target;
     if (t.id === "qk-rec") { QK.rec = t.value; QK.rolls = null; }
     else if (t.id === "qk-rank") { SR.rank = t.value; try { localStorage.setItem("tisane_rank", t.value); } catch (x) { /* ignoré */ } if (player()) rawStore.set("alch_fiches", ficheId(), { player: player(), rank: t.value }); QK.finds = null; QK.rolls = null; }
+    else if (t.id === "qk-spec") { SR.spec = t.value; try { localStorage.setItem("tisane_spec", t.value); } catch (x) { /* ignoré */ } if (player()) rawStore.set("alch_fiches", ficheId(), { player: player(), spec: t.value }); QK.rec = ""; QK.rolls = null; }
     else return;
     renderQuick();
   });
