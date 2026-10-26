@@ -1690,7 +1690,7 @@ function ficheModal() {
   const f = ficheOf() || {};
   openModal(`<h2>Fiche de ${esc(me)}</h2><p class="muted" style="margin:0 0 8px">Renseignée une fois, elle sert sur Tisane &amp; Dragon et sur Alchimie &amp; Dragon.</p>
     <form id="fi-form" autocomplete="off"><label class="muted" for="fi-rank">Rang</label>
-    <select id="fi-rank" class="full">${SR_RANKS.map(r => `<option value="${r[0]}"${r[0] === (f.rank || "Novice") ? " selected" : ""}>${r[0]} (bonus +${r[1]})</option>`).join("")}</select>
+    <select id="fi-rank" class="full">${SR_RANKS.map(r => `<option value="${r[0]}"${r[0] === (f.rank || "Novice") ? " selected" : ""}>${r[0]} (modificateur ${sgn(r[1])})</option>`).join("")}</select>
     <label class="muted" for="fi-spec" style="display:block;margin-top:12px">Spécialisation</label>
     <select id="fi-spec" class="full">${SPECS.map(x => `<option value="${x}"${x === (f.spec || "") ? " selected" : ""}>${x || "Aucune"}</option>`).join("")}</select>
     <label class="muted" for="fi-notes" style="display:block;margin-top:12px">Notes</label><textarea id="fi-notes" rows="4" style="width:100%">${esc(f.notes || "")}</textarea>
@@ -1740,14 +1740,18 @@ if ($("inv-suggest")) $("inv-suggest").onclick = () => {
    Un PJ ne peut chercher que ce qu'il connaît (ingrédients de son inventaire, recettes qu'il a réussies).
    ============================================================ */
 const SR_Q = ["Commun", "Peu commun", "Rare", "Épique", "Légendaire"];
-const SR_MIN = { "Commun": 5, "Peu commun": 11, "Rare": 16, "Épique": 20, "Légendaire": 21 };
-const SR_RANKS = [["Novice", 0], ["Apprenti", 1], ["Expert", 2], ["Compagnon", 3], ["Maître", 4]];
+const SR_MIN = { "Commun": 5, "Peu commun": 11, "Rare": 16, "Épique": 20, "Légendaire": 23 };   // total (d20 + modificateur de rang) minimum pour chaque rareté ; en dessous de 5 : rien
+/* Modificateur du d20 de recherche selon le rang (l'ordre sert aussi à débloquer les recettes de l'apothicaire, par rang 0 à 4) */
+const SR_RANKS = [["Novice", -3], ["Apprenti", -1], ["Expert", 0], ["Compagnon", 1], ["Maître", 3]];
+const sgn = n => n > 0 ? "+" + n : n < 0 ? "−" + (-n) : "0";
 const SR = { mode: "gen", env: "", rank: localStorage.getItem("tisane_rank") || "Novice", d20: "", die: "", rec: "", ing: "" };
 const srRank = () => { const f = ficheOf(); return f && f.rank ? f.rank : SR.rank; };
 const srBonus = () => (SR_RANKS.find(r => r[0] === srRank()) || [0, 0])[1];
-const srRarity = t => t >= 21 ? "Légendaire" : t >= 20 ? "Épique" : t >= 16 ? "Rare" : t >= 11 ? "Peu commun" : t >= 5 ? "Commun" : null;
+const srRarity = t => t >= 23 ? "Légendaire" : t >= 20 ? "Épique" : t >= 16 ? "Rare" : t >= 11 ? "Peu commun" : t >= 5 ? "Commun" : null;   // 0-4 rien · 5-10 commun · 11-15 peu commun · 16-19 rare · 20-22 épique · 23+ légendaire
 const srEnvs = () => categories.filter(c => groupOf(c) === "environnement");
-const srPool = (env, q) => CATALOG.filter(c => c.envs.includes(env) && c.q === q).sort((a, b) => a.name.localeCompare(b.name, "fr"));
+let GATHER = [];   // Tisane : les ingrédients à récolter sont ceux de l'alchimie (grimoire-alchimie.json)
+const gatherSrc = () => ALCH ? CATALOG : GATHER;
+const srPool = (env, q) => gatherSrc().filter(c => c.envs.includes(env) && c.q === q).sort((a, b) => a.name.localeCompare(b.name, "fr"));
 const srKnown = () => { const me = player(); return inventory.filter(i => i.player === me).map(i => catalogItem(i.name)).filter(Boolean); };
 const srQty = die => Math.max(1, Math.floor(die / 2));
 function srNeed(it) {   // d20 minimum pour tomber sur cette rareté dans l'environnement choisi
@@ -1758,7 +1762,7 @@ function srNeed(it) {   // d20 minimum pour tomber sur cette rareté dans l'envi
   return { th, d, ok: d <= 20, n: srPool(SR.env, it.q).length, q: it.q };
 }
 const srNeedTxt = (it, nd) => !nd ? "" : nd.none ? `<span class="muted">${esc(cap(it.name))} : introuvable dans cet environnement.</span>`
-  : nd.ok ? `<b>${esc(cap(it.name))}</b> (${esc(nd.q)}) : d20 minimum <b>${nd.d}</b> <span class="muted">(total ${nd.th}${srBonus() ? ` − bonus ${srBonus()}` : ""}) · dé de recherche d${nd.n}</span>`
+  : nd.ok ? `<b>${esc(cap(it.name))}</b> (${esc(nd.q)}) : d20 minimum <b>${nd.d}</b> <span class="muted">(total ${nd.th}${srBonus() ? (srBonus() > 0 ? ` − bonus ${srBonus()}` : ` + malus ${-srBonus()}`) : ""}) · dé de recherche d${nd.n}</span>`
   : `<b>${esc(cap(it.name))}</b> (${esc(nd.q)}) : <span style="color:#e8618c">impossible avec ton rang</span> <span class="muted">(total ${nd.th} requis)</span>`;
 function srSlotLines(rec) {
   const lines = []; let worst = 0, blocked = false;
@@ -1826,7 +1830,7 @@ function renderSearch() {
   let h = `<div class="subtabs">${[["gen", "Recherche générale"], ["rec", "Par recette"], ["ing", "Par ingrédient"], ["mine", "Mes recettes"]].map(m => `<button type="button" class="subtab${SR.mode === m[0] ? " active" : ""}" data-srmode="${m[0]}">${m[1]}</button>`).join("")}</div>
     <div class="row" style="gap:12px;flex-wrap:wrap;align-items:end">
       <label>Environnement ${sel("sr-env", envs.map(e => [e.id, e.name]), SR.env, "— choisir —")}</label>
-      <label>Rang ${sel("sr-rank", SR_RANKS.map(r => [r[0], `${r[0]} (+${r[1]})`]), srRank())}</label></div>`;
+      <label>Rang ${sel("sr-rank", SR_RANKS.map(r => [r[0], `${r[0]} (${sgn(r[1])})`]), srRank())}</label></div>`;
   if (SR.mode === "mine") { h = h.replace(/<div class="row"[\s\S]*$/, ""); h += me ? srCraftHtml(null) : `<p class="muted">Choisis d'abord ton personnage.</p>`; root.innerHTML = h; return; }
   if (!envs.length) h += `<p class="muted">Le grimoire n'a pas encore d'environnements.</p>`;
   else if (!SR.env) h += `<p class="muted">Choisis l'environnement dans lequel tu cherches.</p>`;
@@ -1834,7 +1838,7 @@ function renderSearch() {
     const d20 = parseInt(SR.d20, 10), ok = d20 >= 1 && d20 <= 20, tot = ok ? d20 + srBonus() : null, q = ok ? srRarity(tot) : null;
     h += `<div class="row" style="gap:12px;flex-wrap:wrap;align-items:end;margin-top:10px"><label>Ton jet de d20 <input id="sr-d20" type="number" min="1" max="20" value="${esc(SR.d20)}" style="width:90px"></label></div>`;
     if (ok) {
-      h += `<p>Total <b>${tot}</b> (${d20}${srBonus() ? ` + ${srBonus()}` : ""}) : `;
+      h += `<p>Total <b>${tot}</b> (${d20}${srBonus() ? ` ${srBonus() > 0 ? "+" : "−"} ${Math.abs(srBonus())}` : ""}) : `;
       if (!q) h += `<b>rien</b> n'est trouvé.</p>`;
       else {
         const pool = srPool(SR.env, q), n = pool.length;
@@ -1900,7 +1904,7 @@ if ($("sr-root")) {
 
 /* ============================================================
    6b. Récolte : le parcours express des débutants.
-   Deux gestes : « je pars cueillir » (3 récoltes au hasard, puis les recettes qu'elles rendent possibles)
+   Deux gestes : « je pars cueillir » (une récolte au hasard, puis les recettes qu'elle rend possibles)
    et « je veux préparer une recette » (un jet de d20 par ingrédient manquant, puis le verdict).
    Mêmes règles que l'onglet Recherche (rareté selon le d20 + bonus de rang) ; les dés sont lancés par l'appli.
    ============================================================ */
@@ -1911,15 +1915,11 @@ const qkD = n => 1 + Math.floor(Math.random() * n);
 const qkClean = s => String(s || "").replace(/\*\*/g, "");
 const qkS = n => n > 1 ? "s" : "";
 
-function qkRollGather() {
-  const out = [];
-  for (let k = 0; k < 3; k++) {
-    const d20 = qkD(20), tot = d20 + srBonus(), q = srRarity(tot), pool = q ? srPool(QK.env, q) : [];
-    if (!pool.length) { out.push({ d20, none: true }); continue; }
-    const die = qkD(pool.length), it = pool[die - 1];
-    out.push({ d20, q, it, qt: srQty(die) });
-  }
-  QK.finds = out; QK.added = false; QK.fresh = true;
+function qkRollGather() {   // une récolte = un seul jet : d20 + modificateur de rang -> rareté, puis dé de recherche -> ingrédient et quantité
+  const d20 = qkD(20), tot = d20 + srBonus(), q = srRarity(tot), pool = q ? srPool(QK.env, q) : [];
+  if (!pool.length) QK.finds = [{ d20, none: true }];
+  else { const die = qkD(pool.length), it = pool[die - 1]; QK.finds = [{ d20, q, it, qt: srQty(die), die, n: pool.length }]; }
+  QK.added = false; QK.fresh = true;
 }
 const qkFound = () => (QK.finds || []).filter(f => !f.none);
 
@@ -2024,11 +2024,13 @@ function qkPrep(rec) {   // range ce qui a été trouvé, puis remplit le labora
 }
 
 /* ---------- Affichage ---------- */
-const qkDie = (d, bonus) => `<span class="qk-die" title="d20">🎲 ${d}${bonus ? `<small> +${bonus}</small>` : ""}</span>`;
-function qkFindCard(f, i, fresh) {
-  const style = fresh ? ` style="animation-delay:${i * 0.15}s"` : "";
-  if (f.none) return `<div class="qk-card none${fresh ? " pop" : ""}"${style}>${qkDie(f.d20, srBonus())}<div class="qk-name">🍂 Rien cette fois</div><div class="muted">Les environs restent muets.</div></div>`;
-  return `<div class="qk-card${fresh ? " pop" : ""}"${style}>${qkDie(f.d20, srBonus())}<div class="qk-name">${esc(cap(f.it.name))} <span class="qk-x">×${f.qt}</span></div>
+const qkDie = (d, bonus) => `<span class="qk-die" title="d20">🎲 ${d}${bonus ? `<small> ${sgn(bonus)}</small>` : ""}</span>`;
+const qkPlural = (name, n) => n > 1 && /^[^\s-]+$/.test(name) && !/[sxz]$/i.test(name) ? name + "s" : name;
+function qkFindCard(f, i, fresh) {   // « Vous trouvez 5 champignourets (d20 : 11 puis d10 : 3) »
+  const cls = fresh ? " pop" : "";
+  if (f.none) return `<div class="qk-card none${cls}"><div class="qk-name">🍂 Vous ne trouvez rien</div><div class="muted">(d20 : ${f.d20})</div></div>`;
+  return `<div class="qk-card${cls}"><div class="qk-name">Vous trouvez ${f.qt} ${esc(qkPlural(f.it.name.toLowerCase(), f.qt))}</div>
+    <div class="muted">(d20 : ${f.d20} puis d${f.n} : ${f.die})</div>
     <div class="qk-q">${esc(f.q)}</div>${f.it.desc ? `<div class="muted qk-desc">${esc(qkClean(f.it.desc))}</div>` : ""}</div>`;
 }
 function qkRecLine(r, extra) { return `<div class="qk-rec"><span><b>${esc(cap(r.name))}</b>${extra || ""}</span><button type="button" class="btn ghost small" data-qk-open="${esc(r.key)}">Voir</button></div>`; }
@@ -2094,16 +2096,16 @@ function renderQuick() {
   SR.env = QK.env;
   let h = `<h2>Que veux-tu faire aujourd'hui ?</h2>`;
   if (!me) h += `<div class="qk-note">👤 Commence par choisir ton personnage. <button type="button" class="btn small" data-qk="name">Choisir mon personnage</button></div>`;
-  h += `<div class="qk-step"><span class="qk-n">1</span> Où es-tu ?<label class="qk-rank">Rang <select id="qk-rank">${SR_RANKS.map(r => `<option value="${esc(r[0])}"${r[0] === srRank() ? " selected" : ""}>${esc(r[0])} (+${r[1]})</option>`).join("")}</select></label></div>`;
+  h += `<div class="qk-step"><span class="qk-n">1</span> Où es-tu ?<label class="qk-rank">Rang <select id="qk-rank">${SR_RANKS.map(r => `<option value="${esc(r[0])}"${r[0] === srRank() ? " selected" : ""}>${esc(r[0])} (${sgn(r[1])})</option>`).join("")}</select></label></div>`;
   h += envs.length ? `<div class="fchips qk-envs">${envs.map(e => `<button type="button" class="fchip qk-pill${QK.env === e.id ? " on" : ""}" data-qk-env="${esc(e.id)}"><span class="dot" style="background:${esc(e.color)}"></span>${esc(e.name)}</button>`).join("")}</div>`
     : `<p class="muted">Le grimoire n'a pas encore d'environnements : le MJ doit en créer.</p>`;
   h += `<div class="qk-step"><span class="qk-n">2</span> Que fais-tu ?</div><div class="qk-modes">
     <button type="button" class="qk-mode${QK.mode === "cueillir" ? " on" : ""}" data-qk-mode="cueillir"><span class="qk-ico">🧺</span><b>Je pars cueillir</b><small>Je tente ma chance et je vois ce que je trouve</small></button>
     <button type="button" class="qk-mode${QK.mode === "recette" ? " on" : ""}" data-qk-mode="recette"><span class="qk-ico">📜</span><b>Je prépare une recette</b><small>Je choisis, puis je cherche ce qui me manque</small></button></div>`;
   if (!QK.env) h += `<p class="muted qk-hint">👆 Choisis d'abord l'endroit où tu te trouves.</p>`;
-  else if (!CATALOG.some(c => c.envs.includes(QK.env))) h += `<p class="muted qk-hint">Aucun ingrédient n'est encore associé à cet endroit : le MJ doit les renseigner (onglet MJ, bibliothèque des ingrédients).</p>`;
+  else if (!gatherSrc().some(c => c.envs.includes(QK.env))) h += `<p class="muted qk-hint">Aucun ingrédient n'est encore associé à cet endroit : le MJ doit les renseigner (onglet MJ, bibliothèque des ingrédients).</p>`;
   else if (QK.mode === "cueillir") {
-    if (!QK.finds) h += `<button type="button" class="btn qk-go" data-qk="roll">🎲 Partir cueillir (3 récoltes)</button>`;
+    if (!QK.finds) h += `<button type="button" class="btn qk-go" data-qk="roll">🎲 Partir cueillir</button>`;
     else {
       h += `<h3 style="margin-top:6px">Ta récolte</h3><div class="qk-finds">${QK.finds.map((f, i) => qkFindCard(f, i, fresh)).join("")}</div><div class="row" style="margin-top:10px">`;
       if (qkFound().length) h += QK.added ? `<span class="qk-okline">✓ Rangé dans ton sac</span>` : `<button type="button" class="btn qk-go" data-qk="bag">🎒 Tout ranger dans mon sac</button>`;
@@ -2165,7 +2167,9 @@ $("qual-panel").classList.toggle("hidden", ALCH);   // le tableau de qualités (
 $("lib-anec-wrap").classList.toggle("hidden", ALCH);
 ["c", "d"].forEach(k => $("mj-" + k).classList.toggle("hidden", !ALCH));
 if (!ALCH) fetch(GRIMOIRE_FILE, { cache: "no-cache" }).then(r => r.ok ? r.json() : null).then(d => {
-  if (!d || !Array.isArray(d.categories)) return;
+  if (!d) return;
+  GATHER = (d.ingredients || []).filter(i => i && i.name).map(i => ({ id: metaId(i.name), name: i.name, desc: i.desc || "", q: normQ(i.qualite), envs: i.envs || [], key: stripKey(i.name) }));
+  if (!Array.isArray(d.categories)) { qkRefresh(); return; }
   SHARED_CATS = d.categories.filter(c => c && c.id && c.name).map(c => ({ id: c.id, name: c.name, color: HEX.test(c.color) ? c.color : PALETTE[0], group: MANAGED.includes(c.group) ? c.group : "propriete" }));
   applyCats(); renderCategories(); renderInventory(); renderSocio(); renderMj(); renderLib(); qkRefresh();
 }).catch(() => {});
