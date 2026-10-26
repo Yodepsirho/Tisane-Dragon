@@ -1,6 +1,6 @@
 /* Une seule application pour deux pages : « Tisane & Dragon » (index.html, alchimiste apothicaire) et « Alchimie & Dragon » (alchimie.html, toutes les spécialisations).
    Même code ; l'alchimie a ses propres collections (préfixe alch_). */
-const APP = window.APP || { id: "tisane" }, PAGE_ALCH = APP.id === "alchimie", ALCH = true, COLP = PAGE_ALCH ? "alch_" : "";
+const APP = window.APP || { id: "tisane" }, PAGE_ALCH = APP.id === "alchimie", ALCH = true, COLP = PAGE_ALCH ? "alch_" : "alch_apo_";   /* chaque page a ses propres collections ; « alch_apo_ » est couvert par la règle « alch_.* » de firestore.rules, sans redéploiement. Les anciennes collections de tisanes ne sont plus lues. */
 /* Tisane & Dragon (index.html) fonctionne comme un alchimiste apothicaire ; Alchimie & Dragon propose toutes les spécialisations. Les tisanes seront réimplantées plus tard. */
 const T = "potion";   // le mot employé pour le produit fini
 document.documentElement.dataset.app = APP.id;
@@ -52,7 +52,7 @@ if (useFirebase) {
 }
 
 const rawStore = store;   /* accès direct aux deux jeux de collections (transfert d'ingrédients, fiche de personnage commune) */
-if (COLP) {   /* l'alchimie lit et écrit dans ses propres collections */
+if (COLP) {   /* chaque page lit et écrit dans ses propres collections */
   const raw = store;
   store = {
     subscribe: (c, cb) => raw.subscribe(COLP + c, cb), add: (c, o) => raw.add(COLP + c, o), set: (c, i, o) => raw.set(COLP + c, i, o),
@@ -1679,7 +1679,7 @@ $("fiche-btn").onclick = ficheModal;
 
 /* Passer un ingrédient d'une page à l'autre : le PJ choisit au moment du clic la quantité et s'il copie ou déplace */
 function transferModal(it) {
-  const me = player(), other = PAGE_ALCH ? "Tisane & Dragon" : "Alchimie & Dragon", col = (PAGE_ALCH ? "" : "alch_") + "inventaire";
+  const me = player(), other = PAGE_ALCH ? "Tisane & Dragon" : "Alchimie & Dragon", col = (PAGE_ALCH ? "alch_apo_" : "alch_") + "inventaire";
   openModal(`<h2>Envoyer vers ${esc(other)}</h2><p class="muted" style="margin:0 0 8px">${esc(cap(it.name))} : ${it.qty} en stock ici.</p>
     <form id="xf-form" autocomplete="off"><label class="muted" for="xf-qty">Quantité à envoyer</label><input id="xf-qty" type="number" min="1" max="${Math.max(1, it.qty)}" value="${Math.max(1, it.qty)}" style="width:100px">
     <label class="check2"><input type="radio" name="xf-mode" value="copy" checked><span>Copier : il reste aussi ici</span></label>
