@@ -60,11 +60,11 @@
         <div id="recipes-known" class="recipes"></div>
       </div>
       <div class="panel">
-        <h2>Tisanes de <span id="tis-owner"></span></h2>
+        <h2>Potions de <span id="tis-owner"></span></h2>
         <div id="tisanes"></div>
       </div>
       <div class="panel">
-        <h2>Tisanes des autres PJ</h2>
+        <h2>Potions des autres PJ</h2>
         <div id="tisanes-others"></div>
       </div>
       </div>
@@ -173,7 +173,7 @@
 
       <div id="l-result-wrap">
         <label class="field" for="l-result">Résultat obtenu</label>
-        <input id="l-result" placeholder="Ex : tisane apaisante">
+        <input id="l-result" placeholder="Ex : potion de soin">
       </div>
 
       <label class="field" for="l-status">État du mélange</label>
@@ -187,7 +187,7 @@
       <label class="check" id="l-consume-wrap"><input type="checkbox" id="l-consume" checked><span>Retirer ces ingrédients de mon inventaire</span></label>
 
       <div id="l-yield-wrap">
-        <label class="field" for="l-yield">Quantité de tisane obtenue</label>
+        <label class="field" for="l-yield">Quantité de potion obtenue</label>
         <input id="l-yield" type="number" min="0" value="1" style="width:90px">
       </div>
 
@@ -214,7 +214,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script>window.APP = { id: "tisane" };</script>
-<script src="grimoire-tisane.js"></script>
+<script src="recettes-apothicaire.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

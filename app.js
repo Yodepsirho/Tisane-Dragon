@@ -1,7 +1,8 @@
-/* Une seule application pour deux pages : « Tisane & Dragon » (index.html) et « Alchimie & Dragon » (alchimie.html).
-   Même code, mêmes principes ; l'alchimie a ses propres collections (préfixe alch_) et sa propre bibliothèque de recettes du MJ. */
-const APP = window.APP || { id: "tisane" }, ALCH = APP.id === "alchimie", COLP = ALCH ? "alch_" : "";
-const T = ALCH ? "potion" : "tisane";   // le mot employé pour le produit fini
+/* Une seule application pour deux pages : « Tisane & Dragon » (index.html, alchimiste apothicaire) et « Alchimie & Dragon » (alchimie.html, toutes les spécialisations).
+   Même code ; l'alchimie a ses propres collections (préfixe alch_). */
+const APP = window.APP || { id: "tisane" }, PAGE_ALCH = APP.id === "alchimie", ALCH = true, COLP = PAGE_ALCH ? "alch_" : "";
+/* Tisane & Dragon (index.html) fonctionne comme un alchimiste apothicaire ; Alchimie & Dragon propose toutes les spécialisations. Les tisanes seront réimplantées plus tard. */
+const T = "potion";   // le mot employé pour le produit fini
 document.documentElement.dataset.app = APP.id;
 
 /* ============================================================
@@ -82,19 +83,12 @@ const HEX = /^#[0-9a-f]{6}$/i;
 
 /* ============================================================
    2b. Grimoire du MJ : familles, catalogue, effets et moteur de résolution.
-   Les données (RULES) viennent du dépôt « Grimoire du tisanier ». Le laboratoire en mode automatique joue le rôle du MJ.
+   Le laboratoire en mode automatique joue le rôle du MJ à partir des recettes de l'alchimie.
    ============================================================ */
-/* Les règles du Grimoire (grimoire-tisane.js) ne sont chargées que par la page des tisanes : l'alchimie repart de zéro. */
-const RULES = window.RULES || { F: {}, X: {}, Y: {}, Z: {}, D: [], DD: [], DI: [], TN: [], DU: [] };
-
-/* Les six familles du Grimoire remplacent les Classifications de l'app (identifiants fixes, pour qu'un réimport ne crée pas de doublon) */
-const FAMILIES = ALCH ? {} : {
-  A: { name: "Apaisantes", color: "#e08fb4" }, V: { name: "Vigoureuses", color: "#e0916a" }, E: { name: "Écorces et feuillages", color: "#a3c4a0" },
-  L: { name: "Lunaires", color: "#9aa9c9" }, M: { name: "Mythalliques", color: "#6fcdbf" }, N: { name: "Inertes", color: "#a8a99a" }
-};
-const famCatId = f => catId(FAMILIES[f].name);
-const famIds = new Set(Object.keys(FAMILIES).map(f => catId(FAMILIES[f].name)));   // identifiants réservés : ces catégories ne sont jamais montrées aux PJ
-const famOfName = {}; Object.keys(RULES.F).forEach(f => RULES.F[f][1].forEach(([n]) => { famOfName[n] = f; }));
+/* Plus de règles de tisane : le MJ automatique ne s'appuie que sur les recettes de l'alchimie. */
+const RULES = { F: {}, X: {}, Y: {}, Z: {}, D: [], DD: [], DI: [], TN: [], DU: [] };   // plus de règles de tisane
+const FAMILIES = {}, famOfName = {}, famCatId = f => f;
+const famIds = new Set();
 const stripKey = s => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 /* Bibliothèque du MJ (le « backend ») : ingrédients, potions (un effet par paire de familles) et effets anecdotiques.
    Elle vit dans Firestore et se modifie dans l'onglet MJ. Tant qu'elle n'est pas initialisée, ce sont les données du Grimoire qui servent. */
@@ -103,14 +97,10 @@ const QL = ["", "Commun", "Peu commun", "Rare", "Épique", "Légendaire"];
 const QN = {}; QL.forEach((q, i) => { if (q) QN[q] = i; });
 const Q_ALIAS = { basse: "Commun", commun: "Commun", commune: "Commun", moyenne: "Peu commun", "peu commun": "Peu commun", "peu commune": "Peu commun", "élevée": "Rare", elevee: "Rare", rare: "Rare", "épique": "Épique", epique: "Épique", "suprême": "Légendaire", supreme: "Légendaire", "légendaire": "Légendaire", legendaire: "Légendaire" };
 const normQ = q => QN[q] ? q : (Q_ALIAS[String(q || "").trim().toLowerCase()] || "");
-const DEFAULTS = ALCH ? { ingredients: [], potions: [], anecdotes: [], categories: [] } : {
-  ingredients: RULES.D.map(([name, desc, price]) => ({ name, desc, price, family: famOfName[name] })),
-  potions: Object.keys(RULES.X).map(k => ({ key: k, name: RULES.X[k][0], tiers: RULES.X[k][1], duration: RULES.X[k][2] || null, fail: RULES.Z[k] })),
-  anecdotes: Object.keys(RULES.Y).map(k => ({ key: k, name: RULES.Y[k][0], text: RULES.Y[k][1], type: RULES.Y[k][2] }))
-};
+const DEFAULTS = { ingredients: [], potions: [], anecdotes: [], categories: [] };   // rempli par grimoire-alchimie.json
 let libIng = [], libPot = [], libAnec = [];
-/* Tisanes : prête dès que les potions sont enregistrées. Alchimie : prête dès qu'elle contient quelque chose, ou si le fichier grimoire-alchimie.json est vide (rien à initialiser). */
-const libReady = () => ALCH ? (libIng.length + libPot.length > 0 || DEFAULTS.ingredients.length + DEFAULTS.potions.length === 0) : libPot.length > 0;
+/* Bibliothèque prête dès qu'elle contient quelque chose, ou si le fichier grimoire-alchimie.json est vide (rien à initialiser). */
+const libReady = () => libIng.length + libPot.length > 0 || DEFAULTS.ingredients.length + DEFAULTS.potions.length === 0;
 let rawCats = [], RECS = [];
 let CATALOG = [], POT = {}, ANEC = {};
 /* Catégories : celles de Firestore ; tant que l'alchimie n'est pas initialisée, celles du fichier grimoire-alchimie.json s'y ajoutent */
@@ -122,9 +112,7 @@ function applyCats() {
   const base = fromFile ? rawCats.map(c => fromFile.has(c.id) ? { ...c, name: fromFile.get(c.id).name, color: fromFile.get(c.id).color, group: fromFile.get(c.id).group } : c) : rawCats;
   categories = [...base, ...extra].filter(c => !c.deleted && !famIds.has(c.id));
   /* Tisane reprend à l'identique les catégories d'Alchimie (classification, propriété, environnement), lues dans grimoire-alchimie.json */
-  if (!ALCH && SHARED_CATS) categories = SHARED_CATS.map(c => ({ ...c }));
 }
-let SHARED_CATS = null;
 const catMemo = new Map();
 function rebuildLib() {
   const L = libReady() ? { ingredients: libIng, potions: libPot, anecdotes: libAnec } : DEFAULTS;
@@ -166,16 +154,6 @@ function catalogItem(name) {
   }
   catMemo.set(k, found);
   return found;
-}
-/* Règles du MJ pour deux ingrédients : inerte ou somme des prix ≤ 10 = effet anecdotique, sinon effet de la paire de familles selon la somme (≤60 léger, ≤200 marqué, au-delà exceptionnel) */
-function mixOutcome(a, b) {
-  const s = a.p + b.p, key = [a.f, b.f].sort().join("");
-  if (a.f === "N" || b.f === "N" || s <= 10) {
-    const y = ANEC[key]; if (!y) return null;
-    return { potion: false, name: y.name, text: y.text, type: y.type, duration: y.type === "0" ? null : "1 heure", names: [a.name, b.name], a, b, s };
-  }
-  const t = s <= 60 ? 0 : s <= 200 ? 1 : 2, e = POT[key]; if (!e) return null;
-  return { potion: true, name: e.name, t, tier: RULES.TN[t], duration: e.duration || RULES.DU[t], text: e.tiers[t], dd: RULES.DD[t], fail: (e.fail || "").replace(/\{d\}/g, RULES.DI[t]), names: [a.name, b.name], a, b, s };
 }
 /* Alchimie : une recette du MJ est un jeu de 2 à 4 « emplacements ». Un emplacement est :
    - un ingrédient précis de la bibliothèque,
@@ -232,11 +210,6 @@ function autoOutcome(ings) {
     if (new Set(items).size !== items.length) return { error: "Deux de ces noms désignent le même ingrédient." };
     return alchOutcome(items);
   }
-  if (ings.length !== 2) return { error: "Le MJ automatique ne tranche que les mélanges de deux ingrédients. Retire-en un, ou choisis un état à la main." };
-  const items = ings.map(i => catalogItem(i.name)), miss = ings.find((_, k) => !items[k]);
-  if (miss) return { error: `« ${cap(miss.name)} » est inconnu du MJ. Choisis un état à la main.` };
-  if (items[0] === items[1]) return { error: "Ces deux noms désignent le même ingrédient." };
-  return mixOutcome(items[0], items[1]) || { error: "Le MJ n'a pas d'effet pour cette paire de familles." };
 }
 const outcomeName = o => o.potion && o.tier ? `${o.name} (${o.tier})` : o.name;
 const outcomeKind = o => o.potion ? "Potion" : o.type === "b" ? "Désastre mineur" : o.type === "f" ? "Effet anecdotique amusant" : "Aucun effet";
@@ -456,7 +429,7 @@ function invTable(items, detail) {
       ${detail ? "" : `<td class="tcenter"><span class="qwrap" data-qwrap="1">${open ? `<button class="btn ghost small" data-act="dec" data-id="${i.id}" aria-label="Retirer un" ${i.qty <= 0 ? "disabled" : ""}>−</button>` : ""}
         <button class="qnum${open ? " on" : ""}${i.qty <= 0 ? " zero" : ""}" data-act="qty" data-id="${i.id}" title="Cliquer pour modifier la quantité" aria-label="Quantité : ${i.qty}">${i.qty}</button>
         ${open ? `<button class="btn ghost small" data-act="inc" data-id="${i.id}" aria-label="Ajouter un">+</button>` : ""}</span></td>
-      <td class="tcenter"><button class="btn ghost small" data-act="lab" data-id="${i.id}">Au labo</button> <button class="btn ghost small" data-act="xfer" data-id="${i.id}" title="Envoyer vers ${ALCH ? "Tisane" : "Alchimie"} &amp; Dragon">⇄</button></td>`}
+      <td class="tcenter"><button class="btn ghost small" data-act="lab" data-id="${i.id}">Au labo</button> <button class="btn ghost small" data-act="xfer" data-id="${i.id}" title="Envoyer vers ${PAGE_ALCH ? "Tisane" : "Alchimie"} &amp; Dragon">⇄</button></td>`}
       <td class="tcenter"><button class="btn ghost icon" data-act="edit" data-id="${i.id}" title="Modifier l'ingrédient" aria-label="Modifier ${esc(i.name)}">✎</button></td>${detail ? `<td class="tcenter"><button class="btn ghost icon" data-act="inc" data-id="${i.id}" title="Ajouter un à l'inventaire" aria-label="Ajouter ${esc(i.name)} à l'inventaire">+</button></td>` : ""}</tr>${detail && knownOpen.has(i.id) ? detailHTML(i) : ""}`;
   };
   const cols = detail
@@ -1462,7 +1435,7 @@ function mjSim() {
   const items = vals.map(ALCH ? alchItem : catalogItem), miss = vals.find((_, k) => !items[k]);
   if (miss) return msg(`« ${esc(miss)} » n'est pas dans la bibliothèque.`);
   if (new Set(items).size !== items.length) return msg("Choisis des ingrédients différents.");
-  const o = ALCH ? alchOutcome(items) : mixOutcome(items[0], items[1]);
+  const o = alchOutcome(items);
   if (o && o.error) return msg(esc(o.error));
   out.innerHTML = o ? outcomeHTML(o, true) : '<div class="empty" style="padding:0">Pas d\'effet défini pour cette paire.</div>';
 }
@@ -1688,17 +1661,17 @@ const ficheId = () => (player() || "").replace(/[\/\s]+/g, "_");
 function ficheModal() {
   const me = player(); if (!me) { toast("Choisis d'abord ton personnage."); $("player").focus(); return; }
   const f = ficheOf() || {};
-  openModal(`<h2>Fiche de ${esc(me)}</h2><p class="muted" style="margin:0 0 8px">Renseignée une fois, elle sert sur Tisane &amp; Dragon et sur Alchimie &amp; Dragon.</p>
+  openModal(`<h2>Fiche de ${esc(me)}</h2><p class="muted" style="margin:0 0 8px">Renseignée une fois, elle sert sur Tisane &amp; Dragon et sur Alchimie &amp; Dragon (la spécialisation, uniquement sur Alchimie &amp; Dragon : Tisane &amp; Dragon est réservé à l'apothicaire).</p>
     <form id="fi-form" autocomplete="off"><label class="muted" for="fi-rank">Rang</label>
     <select id="fi-rank" class="full">${SR_RANKS.map(r => `<option value="${r[0]}"${r[0] === (f.rank || "Novice") ? " selected" : ""}>${r[0]} (modificateur ${sgn(r[1])})</option>`).join("")}</select>
-    <label class="muted" for="fi-spec" style="display:block;margin-top:12px">Spécialisation</label>
-    <select id="fi-spec" class="full">${SPECS.map(x => `<option value="${x}"${x === (f.spec || "Apothicaire") ? " selected" : ""}>${x}</option>`).join("")}</select>
+    ${PAGE_ALCH ? `<label class="muted" for="fi-spec" style="display:block;margin-top:12px">Spécialisation</label>
+    <select id="fi-spec" class="full">${SPECS.map(x => `<option value="${x}"${x === (f.spec || "Apothicaire") ? " selected" : ""}>${x}</option>`).join("")}</select>` : ""}
     <label class="muted" for="fi-notes" style="display:block;margin-top:12px">Notes</label><textarea id="fi-notes" rows="4" style="width:100%">${esc(f.notes || "")}</textarea>
     <div class="actions-row"><button type="button" class="btn ghost" id="fi-cancel">Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`);
   $("fi-cancel").onclick = closeModal;
   $("fi-form").onsubmit = e => {
     e.preventDefault();
-    rawStore.set("alch_fiches", ficheId(), { player: me, rank: $("fi-rank").value, spec: $("fi-spec").value, notes: $("fi-notes").value.trim() });
+    rawStore.set("alch_fiches", ficheId(), { player: me, rank: $("fi-rank").value, ...(PAGE_ALCH ? { spec: $("fi-spec").value } : {}), notes: $("fi-notes").value.trim() });
     closeModal(); toast("Fiche enregistrée");
   };
 }
@@ -1706,7 +1679,7 @@ $("fiche-btn").onclick = ficheModal;
 
 /* Passer un ingrédient d'une page à l'autre : le PJ choisit au moment du clic la quantité et s'il copie ou déplace */
 function transferModal(it) {
-  const me = player(), other = ALCH ? "Tisane & Dragon" : "Alchimie & Dragon", col = (ALCH ? "" : "alch_") + "inventaire";
+  const me = player(), other = PAGE_ALCH ? "Tisane & Dragon" : "Alchimie & Dragon", col = (PAGE_ALCH ? "" : "alch_") + "inventaire";
   openModal(`<h2>Envoyer vers ${esc(other)}</h2><p class="muted" style="margin:0 0 8px">${esc(cap(it.name))} : ${it.qty} en stock ici.</p>
     <form id="xf-form" autocomplete="off"><label class="muted" for="xf-qty">Quantité à envoyer</label><input id="xf-qty" type="number" min="1" max="${Math.max(1, it.qty)}" value="${Math.max(1, it.qty)}" style="width:100px">
     <label class="check2"><input type="radio" name="xf-mode" value="copy" checked><span>Copier : il reste aussi ici</span></label>
@@ -1746,13 +1719,12 @@ const SR_RANKS = [["Novice", -3], ["Apprenti", -1], ["Expert", 0], ["Compagnon",
 const sgn = n => n > 0 ? "+" + n : n < 0 ? "−" + (-n) : "0";
 const SR = { mode: "gen", env: "", rank: localStorage.getItem("tisane_rank") || "Novice", d20: "", die: "", rec: "", ing: "" };
 const srRank = () => { const f = ficheOf(); return f && f.rank ? f.rank : SR.rank; };
-const srSpec = () => { const f = ficheOf(); return f && f.spec ? f.spec : (localStorage.getItem("tisane_spec") || "Apothicaire"); };
+const srSpec = () => { if (!PAGE_ALCH) return "Apothicaire"; const f = ficheOf(); return f && f.spec ? f.spec : (localStorage.getItem("tisane_spec") || "Apothicaire"); };
 const qkSpecOk = sp => { const l = String(sp || "").split(",").map(x => x.trim()).filter(Boolean); return !l.length || l.includes(srSpec()); };   // sans spécialisation : pour tous
 const srBonus = () => (SR_RANKS.find(r => r[0] === srRank()) || [0, 0])[1];
 const srRarity = t => t >= 23 ? "Légendaire" : t >= 20 ? "Épique" : t >= 16 ? "Rare" : t >= 11 ? "Peu commun" : t >= 5 ? "Commun" : null;   // 0-4 rien · 5-10 commun · 11-15 peu commun · 16-19 rare · 20-22 épique · 23+ légendaire
 const srEnvs = () => categories.filter(c => groupOf(c) === "environnement");
-let GATHER = [];   // Tisane : les ingrédients à récolter sont ceux de l'alchimie (grimoire-alchimie.json)
-const gatherSrc = () => ALCH ? CATALOG : GATHER;
+const gatherSrc = () => CATALOG;
 const srPool = (env, q) => gatherSrc().filter(c => c.envs.includes(env) && c.q === q).sort((a, b) => a.name.localeCompare(b.name, "fr"));
 const srKnown = () => { const me = player(); return inventory.filter(i => i.player === me).map(i => catalogItem(i.name)).filter(Boolean); };
 const srQty = die => Math.max(1, Math.floor(die / 2));
@@ -1789,16 +1761,6 @@ function srCraft(extra) {
   inventory.filter(i => i.player === me && i.qty > 0).forEach(i => { const c = alchItem(i.name); if (c) for (let k = 0; k < Math.min(i.qty, 4); k++) units.push(c); });
   if (extra) units.push(extra);
   const out = [];
-  if (!ALCH) {   /* Tisane : une recette connue est un jeu d'ingrédients nommés */
-    const have = new Set(inventory.filter(i => i.player === me && i.qty > 0).map(i => i.name)); if (extra) have.add(norm(extra.name));
-    const seen = new Set();
-    trials.filter(t => t.player === me && statusOf(t) === "ok" && t.result).forEach(t => {
-      const names = [...new Set((t.ingredients || []).map(i => i.name))], key = setKey(t.ingredients || []); if (!names.length || seen.has(key)) return; seen.add(key);
-      const missing = names.filter(n => !have.has(n));
-      out.push({ name: t.result, missing, usesExtra: !!extra && names.includes(norm(extra.name)), total: names.length });
-    });
-    return out;
-  }
   done.forEach(r => {
     const rec = RECS.find(x => norm(x.name) === norm(r)); if (!rec || !(rec.ingredients || []).length) return;
     const slots = rec.ingredients.map(id => ({ id, s: resolveSlot(id) })), owner = new Array(units.length).fill(-1);
@@ -2115,7 +2077,7 @@ function renderQuick() {
   SR.env = QK.env;
   let h = `<h2>Que veux-tu faire aujourd'hui ?</h2>`;
   if (!me) h += `<div class="qk-note">👤 Commence par choisir ton personnage. <button type="button" class="btn small" data-qk="name">Choisir mon personnage</button></div>`;
-  h += `<div class="qk-step"><span class="qk-n">1</span> Où es-tu ?<span style="margin-left:auto;display:flex;gap:14px;flex-wrap:wrap"><label class="qk-rank" style="margin-left:0">Rang <select id="qk-rank">${SR_RANKS.map(r => `<option value="${esc(r[0])}"${r[0] === srRank() ? " selected" : ""}>${esc(r[0])} (${sgn(r[1])})</option>`).join("")}</select></label>${ALCH ? `<label class="qk-rank" style="margin-left:0">Spécialisation <select id="qk-spec">${SPECS.map(x => `<option${x === srSpec() ? " selected" : ""}>${x}</option>`).join("")}</select></label>` : ""}</span></div>`;
+  h += `<div class="qk-step"><span class="qk-n">1</span> Où es-tu ?<span style="margin-left:auto;display:flex;gap:14px;flex-wrap:wrap"><label class="qk-rank" style="margin-left:0">Rang <select id="qk-rank">${SR_RANKS.map(r => `<option value="${esc(r[0])}"${r[0] === srRank() ? " selected" : ""}>${esc(r[0])} (${sgn(r[1])})</option>`).join("")}</select></label>${PAGE_ALCH ? `<label class="qk-rank" style="margin-left:0">Spécialisation <select id="qk-spec">${SPECS.map(x => `<option${x === srSpec() ? " selected" : ""}>${x}</option>`).join("")}</select></label>` : ""}</span></div>`;
   h += envs.length ? `<div class="fchips qk-envs">${envs.map(e => `<button type="button" class="fchip qk-pill${QK.env === e.id ? " on" : ""}" data-qk-env="${esc(e.id)}"><span class="dot" style="background:${esc(e.color)}"></span>${esc(e.name)}</button>`).join("")}</div>`
     : `<p class="muted">Le grimoire n'a pas encore d'environnements : le MJ doit en créer.</p>`;
   h += `<div class="qk-step"><span class="qk-n">2</span> Que fais-tu ?</div><div class="qk-modes">
@@ -2186,13 +2148,6 @@ $("lib-rec-add").classList.toggle("hidden", !ALCH);
 $("qual-panel").classList.toggle("hidden", ALCH);   // le tableau de qualités (DD, valeurs) est une règle des tisanes
 $("lib-anec-wrap").classList.toggle("hidden", ALCH);
 ["c", "d"].forEach(k => $("mj-" + k).classList.toggle("hidden", !ALCH));
-if (!ALCH) fetch(GRIMOIRE_FILE, { cache: "no-cache" }).then(r => r.ok ? r.json() : null).then(d => {
-  if (!d) return;
-  GATHER = (d.ingredients || []).filter(i => i && i.name).map(i => ({ id: metaId(i.name), name: i.name, desc: i.desc || "", q: normQ(i.qualite), envs: i.envs || [], key: stripKey(i.name) }));
-  if (!Array.isArray(d.categories)) { qkRefresh(); return; }
-  SHARED_CATS = d.categories.filter(c => c && c.id && c.name).map(c => ({ id: c.id, name: c.name, color: HEX.test(c.color) ? c.color : PALETTE[0], group: MANAGED.includes(c.group) ? c.group : "propriete" }));
-  applyCats(); renderCategories(); renderInventory(); renderSocio(); renderMj(); renderLib(); qkRefresh();
-}).catch(() => {});
 if (ALCH) {
   document.querySelector("#lab .hint").textContent = "Propose des ingrédients : le MJ dit ce qu'ils donnent. Ou note toi-même un essai.";
   $("mj-file-title").textContent = "Fichier du grimoire d'alchimie";
@@ -2213,4 +2168,4 @@ store.subscribe("grimoire_ingredients", d => { libIng = d; onLib(); });
 store.subscribe("grimoire_potions", d => { libPot = d; onLib(); });
 store.subscribe("grimoire_anecdotes", d => { libAnec = d; onLib(); });
 renderQualTable(); renderInventory(); renderRecipes(); renderTisanes(); renderCategories();
-showTab("accueil"); 
+showTab("accueil");
